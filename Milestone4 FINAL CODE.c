@@ -19,6 +19,12 @@
 
 #define task_number 1
 
+/* for buttons and sensors, it is programed so odd numbers are on the robot's left side,
+and even numbers are on the robot's right side
+for example, button1 is on the left and button2 is on the right side.
+
+*/
+
 bool button1_pushed; //flag to store button1 input this is the left button
 bool button2_pushed; //flag to store button2 input this is the right button
 bool button3_pushed; //flag to store button3 input this is the left bumper switch
@@ -195,13 +201,13 @@ void monitorInput() //this function runs often to update various flags and value
   if((hz10adjust > (irthreshold+500)) && (sonar1_value < 50)){ //compensation for reflections, a higher threshold value is used when robot is close to the beacon or a wall, to avoid it detecting reflections
 		beacon = true;
 	}
-	if((hz10adjust < irthreshold)&& (sonar1_value > 50)) {
+	if((hz10adjust < irthreshold)&& (sonar1_value > 50)) { //negative versions
 		beacon = false;
 	}
 	if((hz10adjust < (irthreshold+500))&& ((sonar1_value < 50) && (sonar1_value > -1))) {
 		beacon = false;
 	}
-	if((sonar1_value < 30) && (irsensor1_value > 3200)){
+	if((sonar1_value < 30) && (irsensor1_value > 3200)){ //wall detected in front of robot, used for testing purposes but unused in milestone 4 test as the robot driving into a wall isn't an issue
 		wall = true;
 	}
 	if((sonar1_value > 30) && (irsensor1_value > 3200)){
@@ -240,7 +246,7 @@ void task_1()
 
 	while(true)
 	{
-		// This function updates the button1_pushed and button2_pushed flags.
+		// This function updates various flags and sensor states when ran
 		monitorInput();
 
 		// Switch the states.
@@ -251,20 +257,10 @@ void task_1()
 			// Turn motor off.
 			motor[motor1] = 0;
 			motor[motor2] = 0;
-			if (button1_pushed) {
+			if (button1_pushed) { // when the left button is pushed the robot starts searching for the beacon
 
 				task1_state = SEARCH;
 				// Clear flag to indicate button 1 processed.
-				clearbuttons();
-				break;
-			}
-			if (button2_pushed) {
-				int releasetimer = 0;
-				while (releasetimer < 300){
-						motor[motor3]=22;
-						releasetimer++;
-					}
-				motor[motor3]=0;
 				clearbuttons();
 				break;
 			}
@@ -279,18 +275,11 @@ void task_1()
 				}
 				clearbuttons();
 			}
-			if(beacon)irbalance = balanceLight();
-			if(irsensor1_value > irsensor2_value) {
-				//	irbalance = 1;
+			if(beacon == true)irbalance = balanceLight();
 
-			}
-			if(irsensor1_value < irsensor2_value) {
-				//	irbalance = 2;
-
-			}
 
 			break;
-		case CONNECT: //unfinished for milestone 4
+		case CONNECT: //when robot is in range of beacon for connection magnet will connect automatically, it backs up and starts buzzing to indicate connection
 			// Turn motor on.
 			resetMotorEncoder(motor1);
 			resetMotorEncoder(motor2);
@@ -298,11 +287,11 @@ void task_1()
 			while (timerconnect < 3000){
 				timerconnect++;
 			}
-			while(getMotorEncoder(motor1)>=-200){
+			while(getMotorEncoder(motor1)>=-200){ //robot reverses for a bit
 				motor[motor1]=-30;
 				motor[motor2]=-30;
 			}
-			if(getMotorEncoder(motor1)<=-200){ //victory scream, generates a square wave
+			if(getMotorEncoder(motor1)<=-200){ //victory scream, generates a square wave fed into a piezoelectic buzzer
 				motor[motor1]=0;
 				motor[motor2]=0;
 				int timerpiezo = 0;
@@ -327,57 +316,49 @@ void task_1()
 				monitorLight();
 				motor[motor1]=20;
 				motor[motor2]=20;
-				if ((sonar1_value <30) && (sonar1_value >5)){
+				if ((sonar1_value <30) && (sonar1_value >5)){ //this code helps the robot oriente towards the beacon more when it is close
 					irbalance = balanceLight();
-					if(irsensor1_value > irsensor2_value) {
+					if(irbalance == 1) { //if beacon was last seen on the left it will turn left more and slower because of the 0 value
 						motor[motor1]=0;
 						motor[motor2]=30;
 					}
-					if(irsensor1_value < irsensor2_value) {
+					if(irbalance == 2) { //if beacon was last seen on the right it will turn right more and slower because of the 0 value
 						motor[motor1]=30;
 				  	motor[motor2]=0;
 				}
 				}
-				if (nearbeacon == true){
+				if (nearbeacon == true){ //moves to connect state when beacon is close
 					task1_state = CONNECT;
 					break;
 				}
-				if(beacon)irbalance = balanceLight();
-//				if(irsensor1_value > irsensor2_value) {
-//					irbalance = 1;
-
-//				}
-//				if(irsensor1_value < irsensor2_value) {
-//					irbalance = 2;
-
-//				}
+				if(beacon == true)irbalance = balanceLight(); //updates the beacon on left or right flag only when the beacon is seen to avoid false values
 			}
-			if (nearbeacon == true){
+			if (nearbeacon == true){//moves to connect state when beacon is close
 				task1_state = CONNECT;
 				break;
 			}
-			if ((nearbeacon == false) && (irbalance == 1)){
+			if ((nearbeacon == false) && (irbalance == 1)){ //will go to counter clockwise rotation if it lost the beacon and it was last seen on the left
 				task1_state = SEARCHCC;
 				break;
 			}
-			if ((nearbeacon == false) && (irbalance == 2)){
+			if ((nearbeacon == false) && (irbalance == 2)){ //will go to clockwise rotation if it lost the beacon and it was last seen on the right
 				task1_state = SEARCH;
 				break;
 			}
 			clearbuttons();
 			break;
-		case SEARCH:
+		case SEARCH: //Clockwise rotation search
 			resetMotorEncoder(motor1);
 			resetMotorEncoder(motor2);
 			monitorInput();
-			searchloop = true;
+			searchloop = true; //This remains true until the beacon is found, it is a flag that keeps the robot switching between SEARCH and SEARCHCC, or clockwise and counterclockwise search states
 			while(getMotorEncoder(motor1)<=500){
 				motor[motor1]=22;
 				motor[motor2]=-22;
 				monitorInput();
-				if(beacon == true){
+				if(beacon == true){ //when the beacon is found moves to FORWARD state
 					task1_state = FORWARD;
-					searchloop = false;
+					searchloop = false;//breaks the search pattern loop
 					break;
 				}
 				// Start of wall detection and stop button
@@ -386,7 +367,7 @@ void task_1()
 					searchloop = false;
 					break;
 				}
-				walldetection();
+				walldetection(); //This code is checking if a wall is detected and changes to the wall avoidance state if it does.
 				if(walldetect == 1){
 					task1_state = WALL_STATE;
 					walldetect = 0;
@@ -395,19 +376,19 @@ void task_1()
 				}
 				//end of wall detection and stop button
 			}
-			if(button2_pushed == true){
+			if(button2_pushed == true){//emergency stop button
 				task1_state = MOTOR_STOP;
 				searchloop = false;
 				break;
 			}
 			if(searchloop){
-				task1_state = SEARCHCC;
+				task1_state = SEARCHCC; //moves to counter clockwise state if beacon not found
 				break;
 			}
 			clearbuttons();
 			// task1_state = MOTOR_STOP;
 			break;
-		case SEARCHCC:
+		case SEARCHCC: //counter clockwise rotation search
 			resetMotorEncoder(motor1);
 			resetMotorEncoder(motor2);
 			monitorInput();
@@ -416,9 +397,9 @@ void task_1()
 				motor[motor1]=-22;
 				motor[motor2]=22;
 				monitorInput();
-				if(beacon == true){
+				if(beacon == true){//when the beacon is found moves to FORWARD state
 					task1_state = FORWARD;
-					searchloop = false;
+					searchloop = false; //breaks the search pattern loop
 					break;
 				}
 				// Start of wall detection and stop button
@@ -436,26 +417,26 @@ void task_1()
 				}
 				//end of wall detection and stop button
 			}
-			if(button2_pushed == true){
+			if(button2_pushed == true){ //emergency stop button
 				task1_state = MOTOR_STOP;
 				searchloop = false;
 				break;
 			}
 			if(searchloop){
-				task1_state = SEARCH;
+				task1_state = SEARCH; //moves to clockwise rotation if beacon not found
 				break;
 			}
 			break;
-		case WALL_STATE:
+		case WALL_STATE: //this state is reached if a wall is encountered, walld determines which side the wall was detected. depending on the value of walld the code will move to rotate in teh direction away from the wall
 			resetMotorEncoder(motor1);
 			resetMotorEncoder(motor2);
-			if(walld == 2){ //if left bumper hits wall robot will turn 90 degrees and back up CC
+			if(walld == 2){ //if left bumper hits wall robot will turn 90 degrees counter clockwise and back up
 				task1_state = WALL_CC;
 				walld = 0;
 				walldetect = 0;
 				break;
 			}
-			if(walld == 3){ //if right bumber hits wall robot will turn 90 degrees and back up C
+			if(walld == 3){ //if right bumber hits wall robot will turn 90 degrees clockwise and back up C
 				task1_state = WALL_C;
 				walld = 0;
 				walldetect = 0;
@@ -463,57 +444,57 @@ void task_1()
 			}
 			clearbuttons();
 			break;
-		case WALL_C:
+		case WALL_C: //a clockwise rotation to mvoe away from a wall
 			resetMotorEncoder(motor1);
 			resetMotorEncoder(motor2);
-			while(getMotorEncoder(motor1)<=254){
+			while(getMotorEncoder(motor1)<=254){ //roughly 90 degrees
 				motor[motor1]=22;
 				motor[motor2]=-22;
 				monitorInput();
 				walldetection(); //This code is checking if a wall is detected and changes to the wall avoidance state if it does.
-				if(button2_pushed == true){
+				if(button2_pushed == true){//emergency stop button
 					task1_state = MOTOR_STOP;
 					break;
 				}
-				if(walldetect == 1){
+				if(walldetect == 1){ //if wall is found during this rotation break and go to initial wall avoidance state
 					task1_state = WALL_STATE;
 					break;
 				}
-				if(walldetect == 0){
+				if(walldetect == 0){ // if no wall is found during this rotation move to backing up from wall state
 					task1_state = WALL_BACK;
 				}
 				clearbuttons();
 			}
 			break;
-		case WALL_CC:
+		case WALL_CC://a counter clockwise rotation to mvoe away from a wall
 			resetMotorEncoder(motor1);
 			resetMotorEncoder(motor2);
-			while(getMotorEncoder(motor1)>=-254){
+			while(getMotorEncoder(motor1)>=-254){ //roughly 90 degrees
 				motor[motor1]=-22;
 				motor[motor2]=22;
 				monitorInput();
 				walldetection(); //This code is checking if a wall is detected and changes to the wall avoidance state if it does.
-				if(button2_pushed == true){
+				if(button2_pushed == true){//emergency stop button
 					task1_state = MOTOR_STOP;
 					break;
 				}
-				if(walldetect == 1){
+				if(walldetect == 1){//if wall is found during this rotation break and go to initial wall avoidance state
 					task1_state = WALL_STATE;
 					break;
 				}
-				if(walldetect == 0){
+				if(walldetect == 0){// if no wall is found during this rotation move to backing up from wall state
 					task1_state = WALL_BACK;
 				}
 				clearbuttons();
 			}
 			break;
-		case WALL_BACK:
+		case WALL_BACK: //this is reached if the rotation away from the wall was succesfull. the robot will now back awaay from the wall giving it enough space to perform its searchpattern
 			resetMotorEncoder(motor1);
-			while(getMotorEncoder(motor1)>=-500){
+			while(getMotorEncoder(motor1)>=-500){ //backs up for a bit
 				motor[motor1]=-22;
 				motor[motor2]=-22;
 				monitorInput();
-				walldetection(); //This code is checking if a wall is detected and changes to the wall avoidance state if it does.
+				walldetection(); //This code is checking if a wall is detected and changes to the intial wall avoidance state if it does.
 				if(walldetect == 1){
 					task1_state = WALL_STATE;
 					break;
